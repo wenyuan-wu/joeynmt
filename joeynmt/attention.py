@@ -289,3 +289,73 @@ class LastStateAttention(AttentionMechanism):
 
     def __repr__(self):
         return "LastStateAttention"
+
+
+class AverageAttention(AttentionMechanism):
+    """
+    Implements assigning the same weight to all states.
+
+    """
+
+    def __init__(self):
+        """
+        Creates attention mechanism.
+        """
+
+        super(AverageAttention, self).__init__()
+
+    # pylint: disable=arguments-differ
+    def forward(self, query: torch.Tensor = None,
+                mask: torch.Tensor = None,
+                values: torch.Tensor = None):
+        """
+        Attention forward pass.
+        Computes context vectors and attention scores for a given query and
+        all masked values and returns them.
+
+        :param query: the item (decoder state) to compare with the keys/memory,
+            shape (batch_size, 1, decoder.hidden_size)
+        :param mask: mask out keys position (0 in invalid positions, 1 else),
+            shape (batch_size, 1, src_length)
+        :param values: values (encoder states),
+            shape (batch_size, src_length, encoder.hidden_size)
+        :return: context vector of shape (batch_size, 1, value_size),
+            attention probabilities of shape (batch_size, 1, src_length)
+        """
+        self._check_input_shapes_forward(query=query, mask=mask, values=values)
+
+        assert mask is not None, "mask is required"
+
+        src_length = mask.shape[2]
+
+        weight_per_state = 1.0 / src_length
+
+        # alphas: batch_size, 1, src_length
+        alphas = torch.full_like(mask, weight_per_state)
+
+        # mask out invalid positions by filling the masked out parts with -inf
+        alphas = torch.where(mask, alphas, alphas.new_full([1], float('-inf')))
+
+        # the context vector is the weighted sum of the values
+        context = alphas @ values  # batch x 1 x values_size
+
+        return context, alphas
+
+    def _check_input_shapes_forward(self, query: torch.Tensor,
+                                    mask: torch.Tensor,
+                                    values: torch.Tensor):
+        """
+        Make sure that inputs to `self.forward` are of correct shape.
+        Same input semantics as for `self.forward`.
+
+        :param query:
+        :param mask:
+        :param values:
+        :return:
+        """
+        assert query.shape[0] == values.shape[0] == mask.shape[0]
+        assert query.shape[1] == 1 == mask.shape[1]
+        assert mask.shape[2] == values.shape[1]
+
+    def __repr__(self):
+        return "AverageAttention"

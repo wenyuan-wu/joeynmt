@@ -8,7 +8,7 @@ from typing import Optional
 import torch
 import torch.nn as nn
 from torch import Tensor
-from joeynmt.attention import BahdanauAttention, LuongAttention
+from joeynmt.attention import BahdanauAttention, LuongAttention, LastStateAttention, AverageAttention
 from joeynmt.encoders import Encoder
 from joeynmt.helpers import freeze_params, ConfigurationError, subsequent_mask
 from joeynmt.transformer_layers import PositionalEncoding, \
@@ -58,7 +58,7 @@ class RecurrentDecoder(Decoder):
         :param emb_size: target embedding size
         :param hidden_size: size of the RNN
         :param encoder: encoder connected to this decoder
-        :param attention: type of attention, valid options: "bahdanau", "luong"
+        :param attention: type of attention, valid options: "bahdanau", "luong", "last", "average"
         :param num_layers: number of recurrent layers
         :param vocab_size: target vocabulary size
         :param hidden_dropout: Is applied to the input to the attentional layer.
@@ -111,9 +111,13 @@ class RecurrentDecoder(Decoder):
         elif attention == "luong":
             self.attention = LuongAttention(hidden_size=hidden_size,
                                             key_size=encoder.output_size)
+        elif attention == "last":
+            self.attention = LastStateAttention()
+        elif attention == "average":
+            self.attention = AverageAttention()
         else:
             raise ConfigurationError("Unknown attention mechanism: %s. "
-                                     "Valid options: 'bahdanau', 'luong'."
+                                     "Valid options: 'bahdanau', 'luong', 'last', 'average'."
                                      % attention)
 
         self.num_layers = num_layers
