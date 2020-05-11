@@ -4,6 +4,7 @@ Module to represents whole models
 """
 
 import numpy as np
+import torch
 
 import torch.nn as nn
 from torch import Tensor
@@ -127,6 +128,7 @@ class Model(nn.Module):
         :return: batch_loss: sum of losses over non-pad elements in the batch
         """
         # pylint: disable=unused-variable
+        # TODO
         out, hidden, att_probs, _ = self.forward(
             src=batch.src, trg_input=batch.trg_input,
             src_mask=batch.src_mask, src_lengths=batch.src_lengths,
@@ -199,21 +201,46 @@ class Model(nn.Module):
 
 def build_model(cfg: dict = None,
                 src_vocab: Vocabulary = None,
-                trg_vocab: Vocabulary = None) -> Model:
+                trg_vocab: Vocabulary = None,
+                factor_vocab: Vocabulary = None) -> Model:
     """
     Build and initialize the model according to the configuration.
 
     :param cfg: dictionary configuration containing model specifications
     :param src_vocab: source vocabulary
     :param trg_vocab: target vocabulary
+    :param factor_vocab: factor vocabulary
     :return: built and initialized model
     """
     src_padding_idx = src_vocab.stoi[PAD_TOKEN]
     trg_padding_idx = trg_vocab.stoi[PAD_TOKEN]
+    factor_padding_idx = factor_vocab.stoi[PAD_TOKEN]
+
+    # TODO
 
     src_embed = Embeddings(
         **cfg["encoder"]["embeddings"], vocab_size=len(src_vocab),
         padding_idx=src_padding_idx)
+
+    factor_embed = Embeddings(
+        **cfg["encoder"]["embeddings"], vocab_size=len(factor_vocab),
+        padding_idx=factor_padding_idx)
+
+    if cfg["encoder"].get("factor_combine", "concatenate"):
+        if src_vocab == factor_vocab:
+            src_embed = torch.cat(src_embed, factor_embed)
+        else:
+            raise ConfigurationError(
+                "Dimensions for embeddings and encoder inputs are not compatible"
+            )
+
+    if cfg["encoder"].get("factor_combine", "add"):
+        if src_vocab == factor_vocab:
+            pass
+        else:
+            raise ConfigurationError(
+                "Dimensions for embeddings and encoder inputs are not compatible"
+            )
 
     # this ties source and target embeddings
     # for softmax layer tying, see further below
@@ -274,6 +301,6 @@ def build_model(cfg: dict = None,
                 "The decoder must be a Transformer.")
 
     # custom initialization of model parameters
-    initialize_model(model, cfg, src_padding_idx, trg_padding_idx)
+    initialize_model(model, cfg, src_padding_idx, trg_padding_idx, factor_padding_idx)
 
     return model
