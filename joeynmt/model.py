@@ -228,6 +228,7 @@ def build_model(cfg: dict = None,
 
     if cfg["encoder"].get("factor_combine", "concatenate"):
         if src_vocab == factor_vocab:
+            # THIS IS NOT WORKING
             src_embed = torch.cat(src_embed, factor_embed)
         else:
             raise ConfigurationError(
