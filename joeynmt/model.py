@@ -4,8 +4,8 @@ Module to represents whole models
 """
 
 import numpy as np
-import torch
 
+import torch
 import torch.nn as nn
 from torch import Tensor
 import torch.nn.functional as F
@@ -31,8 +31,10 @@ class Model(nn.Module):
                  decoder: Decoder,
                  src_embed: Embeddings,
                  trg_embed: Embeddings,
+                 factor_embed: Embeddings,
                  src_vocab: Vocabulary,
-                 trg_vocab: Vocabulary) -> None:
+                 trg_vocab: Vocabulary,
+                 factor_vocab) -> None:
         """
         Create a new encoder-decoder model
 
@@ -40,17 +42,21 @@ class Model(nn.Module):
         :param decoder: decoder
         :param src_embed: source embedding
         :param trg_embed: target embedding
+        :param factor_embed: factor embedding
         :param src_vocab: source vocabulary
         :param trg_vocab: target vocabulary
+        :param factor_vocab: factor vocabulary
         """
         super(Model, self).__init__()
 
         self.src_embed = src_embed
         self.trg_embed = trg_embed
+        self.factor_embed = factor_embed
         self.encoder = encoder
         self.decoder = decoder
         self.src_vocab = src_vocab
         self.trg_vocab = trg_vocab
+        self.factor_vocab = factor_vocab
         self.bos_index = self.trg_vocab.stoi[BOS_TOKEN]
         self.pad_index = self.trg_vocab.stoi[PAD_TOKEN]
         self.eos_index = self.trg_vocab.stoi[EOS_TOKEN]
@@ -127,8 +133,8 @@ class Model(nn.Module):
             a scalar loss for the complete batch
         :return: batch_loss: sum of losses over non-pad elements in the batch
         """
+        # TODO: batches (objects of type Batch) will have an attribute factor
         # pylint: disable=unused-variable
-        # TODO
         out, hidden, att_probs, _ = self.forward(
             src=batch.src, trg_input=batch.trg_input,
             src_mask=batch.src_mask, src_lengths=batch.src_lengths,
@@ -195,8 +201,9 @@ class Model(nn.Module):
                "\tencoder=%s,\n" \
                "\tdecoder=%s,\n" \
                "\tsrc_embed=%s,\n" \
-               "\ttrg_embed=%s)" % (self.__class__.__name__, self.encoder,
-                   self.decoder, self.src_embed, self.trg_embed)
+               "\ttrg_embed=%s,\n" \
+               "\tfactor_embed=%s)" % (self.__class__.__name__, self.encoder,
+                   self.decoder, self.src_embed, self.trg_embed, self.factor_embed)
 
 
 def build_model(cfg: dict = None,
@@ -216,32 +223,31 @@ def build_model(cfg: dict = None,
     trg_padding_idx = trg_vocab.stoi[PAD_TOKEN]
     factor_padding_idx = factor_vocab.stoi[PAD_TOKEN]
 
-    # TODO
-
     src_embed = Embeddings(
         **cfg["encoder"]["embeddings"], vocab_size=len(src_vocab),
         padding_idx=src_padding_idx)
 
+    # TODO: apply a) concatenating the embeddings and b) summing the embeddings
     factor_embed = Embeddings(
-        **cfg["encoder"]["embeddings"], vocab_size=len(factor_vocab),
+        **cfg["encoder"]["factor_embeddings"], vocab_size=len(factor_vocab),
         padding_idx=factor_padding_idx)
 
-    if cfg["encoder"].get("factor_combine", "concatenate"):
-        if src_vocab == factor_vocab:
-            # THIS IS NOT WORKING
-            src_embed = torch.cat(src_embed, factor_embed)
+    if cfg["encoder"].get("factor_combine") == "concatenate":
+        if src_embed.embedding_dim == factor_embed.embedding_dim:
+            src_embed.lut.weight.data = torch.cat((src_embed.lut.weight.data, factor_embed.lut.weight.data))
+            src_embed.vocab_size = len(src_vocab) + len(factor_vocab)
         else:
             raise ConfigurationError(
-                "Dimensions for embeddings and encoder inputs are not compatible"
-            )
+                "Embedding cannot be cat since embedding dimensions differ.")
 
-    if cfg["encoder"].get("factor_combine", "add"):
-        if src_vocab == factor_vocab:
-            pass
+    elif cfg["encoder"].get("factor_combine") == "add":
+        # TODO: This can never happen since the sizes of tensors differ so they can not be added to each other
+        if len(src_vocab) == len(factor_vocab):
+            src_embed.lut.weight.data = src_embed.lut.weight.data.add(factor_embed.lut.weight.data)
+            src_embed.vocab_size = len(src_vocab) + len(factor_vocab)
         else:
             raise ConfigurationError(
-                "Dimensions for embeddings and encoder inputs are not compatible"
-            )
+                "Embedding cannot be add since size of vocabularies differ.")
 
     # this ties source and target embeddings
     # for softmax layer tying, see further below
@@ -287,7 +293,8 @@ def build_model(cfg: dict = None,
 
     model = Model(encoder=encoder, decoder=decoder,
                   src_embed=src_embed, trg_embed=trg_embed,
-                  src_vocab=src_vocab, trg_vocab=trg_vocab)
+                  src_vocab=src_vocab, trg_vocab=trg_vocab,
+                  factor_embed=factor_embed, factor_vocab=factor_vocab)
 
     # tie softmax layer with trg embeddings
     if cfg.get("tied_softmax", False):
