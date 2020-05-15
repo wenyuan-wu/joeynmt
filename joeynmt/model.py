@@ -229,12 +229,11 @@ def build_model(cfg: dict = None,
         **cfg["encoder"]["embeddings"], vocab_size=len(src_vocab),
         padding_idx=src_padding_idx)
 
-    # TODO
     factor_embed = Embeddings(
         **cfg["encoder"]["factor_embeddings"], vocab_size=len(factor_vocab),
         padding_idx=factor_padding_idx)
 
-    #a)concatenating the embeddings
+    #a)concatenate the embeddings
     if cfg["encoder"].get("factor_combine") == "concatenate":
         if src_embed.embedding_dim == factor_embed.embedding_dim:
             src_embed.lut.weight.data = torch.cat((src_embed.lut.weight.data, factor_embed.lut.weight.data))
@@ -243,9 +242,9 @@ def build_model(cfg: dict = None,
             raise ConfigurationError(
                 "Embedding cannot be cat since embedding dimensions differ.")
     
-    #add the embeddings
+    #b)add the embeddings
     elif cfg["encoder"].get("factor_combine") == "add":
-        # TODO: This can never happen since the sizes of tensors differ so they can not be added to each other
+        # This can never happen since the sizes of tensors differ so they cannot be added to each other
         if len(src_vocab) == len(factor_vocab):
             src_embed.lut.weight.data = src_embed.lut.weight.data.add(factor_embed.lut.weight.data)
             src_embed.vocab_size = len(src_vocab) + len(factor_vocab)
