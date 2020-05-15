@@ -133,12 +133,14 @@ class Model(nn.Module):
             a scalar loss for the complete batch
         :return: batch_loss: sum of losses over non-pad elements in the batch
         """
-        # TODO: batches (objects of type Batch) will have an attribute factor
+        # we assume that batches will have an attribute factor 
+        #see batch.py (lines 35-36)
         # pylint: disable=unused-variable
         out, hidden, att_probs, _ = self.forward(
             src=batch.src, trg_input=batch.trg_input,
             src_mask=batch.src_mask, src_lengths=batch.src_lengths,
             trg_mask=batch.trg_mask)
+
 
         # compute log probs
         log_probs = F.log_softmax(out, dim=-1)
@@ -227,11 +229,12 @@ def build_model(cfg: dict = None,
         **cfg["encoder"]["embeddings"], vocab_size=len(src_vocab),
         padding_idx=src_padding_idx)
 
-    # TODO: apply a) concatenating the embeddings and b) summing the embeddings
+    # TODO
     factor_embed = Embeddings(
         **cfg["encoder"]["factor_embeddings"], vocab_size=len(factor_vocab),
         padding_idx=factor_padding_idx)
 
+    #a)concatenating the embeddings
     if cfg["encoder"].get("factor_combine") == "concatenate":
         if src_embed.embedding_dim == factor_embed.embedding_dim:
             src_embed.lut.weight.data = torch.cat((src_embed.lut.weight.data, factor_embed.lut.weight.data))
@@ -239,7 +242,8 @@ def build_model(cfg: dict = None,
         else:
             raise ConfigurationError(
                 "Embedding cannot be cat since embedding dimensions differ.")
-
+    
+    #add the embeddings
     elif cfg["encoder"].get("factor_combine") == "add":
         # TODO: This can never happen since the sizes of tensors differ so they can not be added to each other
         if len(src_vocab) == len(factor_vocab):
@@ -247,7 +251,7 @@ def build_model(cfg: dict = None,
             src_embed.vocab_size = len(src_vocab) + len(factor_vocab)
         else:
             raise ConfigurationError(
-                "Embedding cannot be add since size of vocabularies differ.")
+                "Embedding cannot be added since size of vocabularies differ.")
 
     # this ties source and target embeddings
     # for softmax layer tying, see further below
